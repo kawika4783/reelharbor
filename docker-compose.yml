@@ -22,8 +22,8 @@ services:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-reelharbor}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-reelharbor}
       REDIS_URL: redis://redis:6379/0
       SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in .env}
-      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8080}
-      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      PUBLIC_URL: https://${APP_DOMAIN:?Set APP_DOMAIN to the Traefik hostname}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
       DEMO_MODE: ${DEMO_MODE:-false}
       ALLOW_PRIVATE_NETWORKS: ${ALLOW_PRIVATE_NETWORKS:-false}
       MAX_STORAGE_PERCENT: ${MAX_STORAGE_PERCENT:-90}
@@ -40,10 +40,22 @@ services:
     networks: [backend]
   web:
     build: ./frontend
-    ports: ["${HTTP_PORT:-8080}:80"]
+    expose: ["80"]
     depends_on: {api: {condition: service_healthy}}
     restart: unless-stopped
     security_opt: [no-new-privileges:true]
-    networks: [backend]
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.reelharbor.rule=Host(`${APP_DOMAIN:?Set APP_DOMAIN to the Traefik hostname}`)"
+      - "traefik.http.routers.reelharbor.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
+      - "traefik.http.routers.reelharbor.tls=true"
+      - "traefik.http.routers.reelharbor.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-letsencrypt}"
+      - "traefik.http.services.reelharbor.loadbalancer.server.port=80"
+      - "traefik.docker.network=${TRAEFIK_NETWORK:-traefik}"
+    networks: [backend, traefik]
 volumes: {postgres_data: {}, redis_data: {}, videos: {}, thumbnails: {}}
-networks: {backend: {driver: bridge}}
+networks:
+  backend: {driver: bridge}
+  traefik:
+    external: true
+    name: ${TRAEFIK_NETWORK:-traefik}

@@ -17,18 +17,20 @@ ReelHarbor is a self-hosted website video discovery and download manager. It cra
 
 The browser uses a React/TypeScript single-page app served by Nginx. Nginx proxies `/api` to FastAPI. FastAPI persists users, scans, pages, video candidates, queue entries, schedules, and library items in PostgreSQL. Redis is provisioned for durable multi-worker coordination; the included single API worker uses its local async event bus for low-latency progress events. Crawlers revalidate DNS and redirects before requests. See [ARCHITECTURE.md](ARCHITECTURE.md) for boundaries, schema, detectors, and security details.
 
-## Install on Ubuntu, Hostinger VPS, or a local Docker server
+## Install on a Traefik-managed Hostinger VPS
 
-Requirements: Docker Engine 25+ with the Compose plugin, at least 4 GB RAM for browser crawling, and sufficient storage for your media.
+Requirements: Docker Engine 25+ with the Compose plugin, an existing Traefik Docker network, at least 4 GB RAM for browser crawling, and sufficient storage for your media.
 
 ```bash
 cp .env.example .env
-# Edit .env and replace POSTGRES_PASSWORD and SECRET_KEY.
+# Set APP_DOMAIN to the DNS hostname routed by Traefik.
+# Set TRAEFIK_NETWORK, entrypoint, and certificate resolver to match your stack.
+# Replace POSTGRES_PASSWORD and SECRET_KEY with strong unique values.
 docker compose up -d --build
 docker compose ps
 ```
 
-Open `http://SERVER_IP:8080` (or the configured `HTTP_PORT`). With `DEMO_MODE=false`, the first-run wizard creates the administrator and storage policy. For HTTPS, put ReelHarbor behind Caddy, Traefik, or Nginx and set `PUBLIC_URL=https://your.domain` plus `COOKIE_SECURE=true`.
+Open `https://APP_DOMAIN`. ReelHarbor publishes no host port: Traefik reaches Nginx on container port 80 through the configured external network and terminates TLS. With `DEMO_MODE=false`, the first-run wizard creates the administrator and storage policy.
 
 Normal operation requires no command line: use **New Scan**, review **Detected Videos**, select the wanted items, and use **Download Selected**. Scheduled scans only detect by default.
 
@@ -36,8 +38,10 @@ Normal operation requires no command line: use **New Scan**, review **Detected V
 
 | Variable | Default | Purpose |
 |---|---:|---|
-| `HTTP_PORT` | `8080` | Published web port |
-| `PUBLIC_URL` | `http://localhost:8080` | Exact allowed frontend origin |
+| `APP_DOMAIN` | required | DNS hostname used by Traefik and the application origin |
+| `TRAEFIK_NETWORK` | `traefik` | Existing external Docker network shared with Traefik |
+| `TRAEFIK_ENTRYPOINT` | `websecure` | HTTPS entrypoint configured in Traefik |
+| `TRAEFIK_CERT_RESOLVER` | `letsencrypt` | Certificate resolver configured in Traefik |
 | `SECRET_KEY` | required | Session and CSRF signing secret |
 | `POSTGRES_PASSWORD` | required | Database password |
 | `DEMO_MODE` | `false` | Seeds sample media and a demo account |
@@ -119,3 +123,5 @@ Test restores periodically and protect backups because the database contains sou
 ## Production notes
 
 Use HTTPS, strong unique secrets, a host firewall, regular backups, and restricted administrator access. For horizontal scale, replace the in-process task/event runner with Celery/RQ workers backed by the provisioned Redis instance; the detector and normalized persistence boundaries are already isolated for that transition.
+
+If your Traefik network, entrypoint, or certificate resolver uses a different name, change the corresponding environment variable rather than publishing a host port.
