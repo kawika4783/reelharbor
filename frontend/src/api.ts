@@ -1,0 +1,5 @@
+export const API='/api';
+export function csrf(){return document.cookie.split('; ').find(x=>x.startsWith('rh_csrf='))?.split('=')[1]||''}
+export async function request<T=any>(path:string,options:RequestInit={}):Promise<T>{const headers=new Headers(options.headers);if(options.body)headers.set('Content-Type','application/json');if(options.method&&!['GET','HEAD'].includes(options.method))headers.set('x-csrf-token',csrf());const r=await fetch(API+path,{...options,headers,credentials:'include'});if(!r.ok){let text='Request failed';try{text=(await r.json()).detail||text}catch{}throw new Error(text)}if(r.status===204)return undefined as T;return r.json()}
+export const size=(n?:number)=>{if(n==null)return'Unknown';const u=['B','KB','MB','GB','TB'];let i=0,v=n;while(v>=1024&&i<u.length-1){v/=1024;i++}return`${v.toFixed(i<2?0:1)} ${u[i]}`}
+export const duration=(s?:number)=>{if(s==null)return'Unknown';const h=Math.floor(s/3600),m=Math.floor(s%3600/60),z=Math.floor(s%60);return h?`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(z).padStart(2,'0')}`:`${String(m).padStart(2,'0')}:${String(z).padStart(2,'0')}`}

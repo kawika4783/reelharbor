@@ -1,0 +1,49 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-reelharbor}
+      POSTGRES_USER: ${POSTGRES_USER:-reelharbor}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes: [postgres_data:/var/lib/postgresql/data]
+    healthcheck: {test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"], interval: 10s, timeout: 5s, retries: 5}
+    restart: unless-stopped
+    networks: [backend]
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    volumes: [redis_data:/data]
+    healthcheck: {test: ["CMD", "redis-cli", "ping"], interval: 10s, timeout: 3s, retries: 5}
+    restart: unless-stopped
+    networks: [backend]
+  api:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-reelharbor}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-reelharbor}
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in .env}
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8080}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      DEMO_MODE: ${DEMO_MODE:-false}
+      ALLOW_PRIVATE_NETWORKS: ${ALLOW_PRIVATE_NETWORKS:-false}
+      MAX_STORAGE_PERCENT: ${MAX_STORAGE_PERCENT:-90}
+      CONCURRENT_DOWNLOADS: ${CONCURRENT_DOWNLOADS:-2}
+    volumes:
+      - videos:/data/videos
+      - thumbnails:/data/thumbnails
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    healthcheck: {test: ["CMD", "curl", "-f", "http://localhost:8000/health"], interval: 30s, timeout: 5s, retries: 3}
+    restart: unless-stopped
+    security_opt: [no-new-privileges:true]
+    networks: [backend]
+  web:
+    build: ./frontend
+    ports: ["${HTTP_PORT:-8080}:80"]
+    depends_on: {api: {condition: service_healthy}}
+    restart: unless-stopped
+    security_opt: [no-new-privileges:true]
+    networks: [backend]
+volumes: {postgres_data: {}, redis_data: {}, videos: {}, thumbnails: {}}
+networks: {backend: {driver: bridge}}
