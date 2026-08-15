@@ -8,21 +8,19 @@ services:
     volumes: [postgres_data:/var/lib/postgresql/data]
     healthcheck: {test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"], interval: 10s, timeout: 5s, retries: 5}
     restart: unless-stopped
-    networks: [backend]
   redis:
     image: redis:7.4-alpine
     command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
     volumes: [redis_data:/data]
     healthcheck: {test: ["CMD", "redis-cli", "ping"], interval: 10s, timeout: 3s, retries: 5}
     restart: unless-stopped
-    networks: [backend]
   api:
     build: ./backend
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-reelharbor}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-reelharbor}
       REDIS_URL: redis://redis:6379/0
       SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in .env}
-      PUBLIC_URL: https://${APP_DOMAIN:?Set APP_DOMAIN to the Traefik hostname}
+      PUBLIC_URL: https://${REELHARBOR_DOMAIN:-reelharbor.srv1831469.hstgr.cloud}
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
       DEMO_MODE: ${DEMO_MODE:-false}
       ALLOW_PRIVATE_NETWORKS: ${ALLOW_PRIVATE_NETWORKS:-false}
@@ -37,7 +35,6 @@ services:
     healthcheck: {test: ["CMD", "curl", "-f", "http://localhost:8000/health"], interval: 30s, timeout: 5s, retries: 3}
     restart: unless-stopped
     security_opt: [no-new-privileges:true]
-    networks: [backend]
   web:
     build: ./frontend
     expose: ["80"]
@@ -45,17 +42,22 @@ services:
     restart: unless-stopped
     security_opt: [no-new-privileges:true]
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.reelharbor.rule=Host(`${APP_DOMAIN:?Set APP_DOMAIN to the Traefik hostname}`)"
-      - "traefik.http.routers.reelharbor.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
-      - "traefik.http.routers.reelharbor.tls=true"
-      - "traefik.http.routers.reelharbor.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-letsencrypt}"
-      - "traefik.http.services.reelharbor.loadbalancer.server.port=80"
-      - "traefik.docker.network=${TRAEFIK_NETWORK:-traefik}"
-    networks: [backend, traefik]
+      traefik.enable: "true"
+      traefik.http.routers.reelharbor.rule: "Host(`${REELHARBOR_DOMAIN:-reelharbor.srv1831469.hstgr.cloud}`)"
+      traefik.http.routers.reelharbor.entrypoints: "websecure"
+      traefik.http.routers.reelharbor.tls: "true"
+      traefik.http.routers.reelharbor.tls.certresolver: "letsencrypt"
+      traefik.http.routers.reelharbor.service: "reelharbor"
+      traefik.http.routers.reelharbor.middlewares: "reelharbor-compress@docker"
+      traefik.http.services.reelharbor.loadbalancer.server.port: "80"
+      traefik.http.services.reelharbor.loadbalancer.healthcheck.path: "/health"
+      traefik.http.services.reelharbor.loadbalancer.healthcheck.interval: "30s"
+      traefik.http.services.reelharbor.loadbalancer.healthcheck.timeout: "5s"
+      traefik.http.middlewares.reelharbor-compress.compress: "true"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 volumes: {postgres_data: {}, redis_data: {}, videos: {}, thumbnails: {}}
-networks:
-  backend: {driver: bridge}
-  traefik:
-    external: true
-    name: ${TRAEFIK_NETWORK:-traefik}

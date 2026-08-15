@@ -19,18 +19,17 @@ The browser uses a React/TypeScript single-page app served by Nginx. Nginx proxi
 
 ## Install on a Traefik-managed Hostinger VPS
 
-Requirements: Docker Engine 25+ with the Compose plugin, an existing Traefik Docker network, at least 4 GB RAM for browser crawling, and sufficient storage for your media.
+Requirements: Docker Engine 25+ with the Compose plugin, Hostinger's managed Traefik ingress, at least 4 GB RAM for browser crawling, and sufficient storage for your media.
 
 ```bash
 cp .env.example .env
-# Set APP_DOMAIN to the DNS hostname routed by Traefik.
-# Set TRAEFIK_NETWORK, entrypoint, and certificate resolver to match your stack.
+# Set REELHARBOR_DOMAIN if you are not using the default Hostinger hostname.
 # Replace POSTGRES_PASSWORD and SECRET_KEY with strong unique values.
 docker compose up -d --build
 docker compose ps
-```
+-```
 
-Open `https://APP_DOMAIN`. ReelHarbor publishes no host port: Traefik reaches Nginx on container port 80 through the configured external network and terminates TLS. With `DEMO_MODE=false`, the first-run wizard creates the administrator and storage policy.
+Open `https://reelharbor.srv1831469.hstgr.cloud` or the configured `REELHARBOR_DOMAIN`. ReelHarbor publishes no host port. Hostinger's managed Traefik discovers the web service from its labels, reaches Nginx on container port 80, and terminates TLS. With `DEMO_MODE=false`, the first-run wizard creates the administrator and storage policy.
 
 Normal operation requires no command line: use **New Scan**, review **Detected Videos**, select the wanted items, and use **Download Selected**. Scheduled scans only detect by default.
 
@@ -38,10 +37,7 @@ Normal operation requires no command line: use **New Scan**, review **Detected V
 
 | Variable | Default | Purpose |
 |---|---:|---|
-| `APP_DOMAIN` | required | DNS hostname used by Traefik and the application origin |
-| `TRAEFIK_NETWORK` | `traefik` | Existing external Docker network shared with Traefik |
-| `TRAEFIK_ENTRYPOINT` | `websecure` | HTTPS entrypoint configured in Traefik |
-| `TRAEFIK_CERT_RESOLVER` | `letsencrypt` | Certificate resolver configured in Traefik |
+| `REELHARBOR_DOMAIN` | `reelharbor.srv1831469.hstgr.cloud` | DNS hostname used by Hostinger Traefik and the application origin |
 | `SECRET_KEY` | required | Session and CSRF signing secret |
 | `POSTGRES_PASSWORD` | required | Database password |
 | `DEMO_MODE` | `false` | Seeds sample media and a demo account |
@@ -124,4 +120,4 @@ Test restores periodically and protect backups because the database contains sou
 
 Use HTTPS, strong unique secrets, a host firewall, regular backups, and restricted administrator access. For horizontal scale, replace the in-process task/event runner with Celery/RQ workers backed by the provisioned Redis instance; the detector and normalized persistence boundaries are already isolated for that transition.
 
-If your Traefik network, entrypoint, or certificate resolver uses a different name, change the corresponding environment variable rather than publishing a host port.
+The Hostinger Compose file intentionally follows the same ingress convention as the existing LocalLens and Forma Studio deployments: `expose`, router/service labels, `websecure`, `letsencrypt`, and no host port or manually declared external Traefik network.
